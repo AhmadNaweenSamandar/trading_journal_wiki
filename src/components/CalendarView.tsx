@@ -48,6 +48,28 @@ function weekdayIndex(date: string): number {
   return day;
 }
 
+function utcDate(date: string): Date {
+  const [y, m, d] = date.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
+}
+
+function isoDay(value: Date): string {
+  return value.toISOString().slice(0, 10);
+}
+
+function addUtcDays(date: string, days: number): string {
+  const next = utcDate(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return isoDay(next);
+}
+
+/** Saturday that opens the week containing this date. */
+function saturdayOf(date: string): string {
+  const day = utcDate(date).getUTCDay();
+  const daysSinceSaturday = (day + 1) % 7;
+  return addUtcDays(date, -daysSinceSaturday);
+}
+
 function daysInMonth(key: string): string[] {
   const [year, month] = key.split("-").map(Number);
   const count = new Date(Date.UTC(year, month, 0)).getUTCDate();
@@ -55,6 +77,26 @@ function daysInMonth(key: string): string[] {
     { length: count },
     (_, i) => `${key}-${String(i + 1).padStart(2, "0")}`,
   );
+}
+
+/**
+ * One row per Saturday-start week. Slots follow Sat, Mon–Fri, Sun so a Friday
+ * always sits under Friday — never the next sequential cell.
+ */
+function monthWeeks(cells: string[]): Array<Array<string | null>> {
+  const inMonth = new Set(cells);
+  const weeks: Array<Array<string | null>> = [];
+  const last = cells[cells.length - 1];
+  if (!last) return weeks;
+
+  for (let saturday = saturdayOf(cells[0]); saturday <= last; saturday = addUtcDays(saturday, 7)) {
+    const sequential = [0, 1, 2, 3, 4, 5, 6].map((offset) => addUtcDays(saturday, offset));
+    const [sat, sun, mon, tue, wed, thu, fri] = sequential;
+    weeks.push(
+      [sat, mon, tue, wed, thu, fri, sun].map((date) => (inMonth.has(date) ? date : null)),
+    );
+  }
+  return weeks;
 }
 
 export function CalendarView({ trades }: { trades: Trade[] }) {
@@ -134,7 +176,7 @@ export function CalendarView({ trades }: { trades: Trade[] }) {
       <div className="space-y-4">
         {visibleMonths.map((key, monthIdx) => {
           const cells = daysInMonth(key);
-          const offset = weekdayIndex(cells[0]);
+          const weeks = monthWeeks(cells);
           const active = cells.filter((d) => dayStats.has(d) && weekdayActive(d));
           const monthPnl = active.reduce(
             (sum, date) => sum + (dayStats.get(date)?.pnl ?? 0),
@@ -237,64 +279,72 @@ export function CalendarView({ trades }: { trades: Trade[] }) {
                         {label}
                       </div>
                     ))}
-                    {Array.from({ length: offset }, (_, i) => (
-                      <div key={`pad-${i}`} className="min-h-[84px]" />
-                    ))}
-                    {cells.map((date) => {
-                      const day = dayStats.get(date);
-                      const dayNumber = Number(date.slice(-2));
-                      const dimmed = !weekdayActive(date);
+                    {weeks.flatMap((week, weekIndex) =>
+                      week.map((date, column) => {
+                        if (!date) {
+                          return (
+                            <div
+                              key={`pad-${weekIndex}-${column}`}
+                              className="min-h-[84px]"
+                            />
+                          );
+                        }
 
-                      if (!day || dimmed) {
+                        const day = dayStats.get(date);
+                        const dayNumber = Number(date.slice(-2));
+                        const dimmed = !weekdayActive(date);
+
+                        if (!day || dimmed) {
+                          return (
+                            <div
+                              key={date}
+                              className={`min-h-[84px] rounded-lg border border-sky-500/15 bg-sky-500/5 p-1.5 text-[11px] ${
+                                dimmed && day ? "text-slate-700 opacity-40" : "text-slate-700"
+                              }`}
+                            >
+                              {dayNumber}
+                            </div>
+                          );
+                        }
+
+                        const positive = day.pnl > 0;
+                        const flat = day.pnl === 0;
                         return (
-                          <div
+                          <Link
                             key={date}
-                            className={`min-h-[84px] rounded-lg border border-sky-500/15 bg-sky-500/5 p-1.5 text-[11px] ${
-                              dimmed && day ? "text-slate-700 opacity-40" : "text-slate-700"
+                            href={`/trades?q=${date}`}
+                            title={`${date} · ${day.count} trades · ${day.wins}W/${day.losses}L · ${currency(day.pnl)}`}
+                            className={`flex min-h-[84px] flex-col justify-between rounded-lg border p-1.5 ${
+                              flat
+                                ? "border-sky-500/30 bg-sky-500/10"
+                                : positive
+                                  ? "border-emerald-500/30 bg-emerald-500/10"
+                                  : "border-rose-500/30 bg-rose-500/10"
                             }`}
                           >
-                            {dayNumber}
-                          </div>
-                        );
-                      }
-
-                      const positive = day.pnl > 0;
-                      const flat = day.pnl === 0;
-                      return (
-                        <Link
-                          key={date}
-                          href={`/trades?q=${date}`}
-                          title={`${date} · ${day.count} trades · ${day.wins}W/${day.losses}L · ${currency(day.pnl)}`}
-                          className={`flex min-h-[84px] flex-col justify-between rounded-lg border p-1.5 ${
-                            flat
-                              ? "border-sky-500/30 bg-sky-500/10"
-                              : positive
-                                ? "border-emerald-500/30 bg-emerald-500/10"
-                                : "border-rose-500/30 bg-rose-500/10"
-                          }`}
-                        >
-                          <span className="text-[11px] text-slate-400">{dayNumber}</span>
-                          <span
-                            className={`text-[12px] font-semibold leading-tight ${tone(day.pnl)}`}
-                          >
-                            {currency(day.pnl)}
-                          </span>
-                          <span className="flex items-baseline justify-between text-[10px] leading-tight">
-                            <span className="text-slate-500">
-                              {day.count}
-                              {day.count === 1 ? " trade" : " trades"}
-                            </span>
+                            <span className="text-[11px] text-slate-400">{dayNumber}</span>
                             <span
-                              className={
-                                day.winRate >= 50 ? "text-emerald-400/80" : "text-rose-400/80"
-                              }
+                              className={`text-[12px] font-semibold leading-tight ${tone(day.pnl)}`}
                             >
-                              {day.winRate.toFixed(0)}%
+                              {currency(day.pnl)}
                             </span>
-                          </span>
-                        </Link>
-                      );
-                    })}
+                            <span className="flex items-baseline justify-between text-[10px] leading-tight">
+                              <span className="text-slate-500">
+                                {day.count}
+                                {day.count === 1 ? " trade" : " trades"}
+                              </span>
+                              <span
+                                className={
+                                  day.winRate >= 50 ? "text-emerald-400/80" : "text-rose-400/80"
+                                }
+                              >
+                                {day.winRate.toFixed(0)}%
+                              </span>
+                            </span>
+                          </Link>
+                        );
+                      }),
+                    )}
                   </div>
                 </div>
 
@@ -307,9 +357,10 @@ export function CalendarView({ trades }: { trades: Trade[] }) {
                   <div className="pb-1 text-center text-[11px] font-medium uppercase tracking-wide text-sky-400">
                     Weeks
                   </div>
-                  {weeksOfMonth(cells, offset).map((week, index) => {
+                  {weeks.map((week, index) => {
                     const traded = week.filter(
-                      (date) => dayStats.has(date) && weekdayActive(date),
+                      (date): date is string =>
+                        date != null && dayStats.has(date) && weekdayActive(date),
                     );
                     const weekPnl = traded.reduce(
                       (sum, date) => sum + (dayStats.get(date)?.pnl ?? 0),
@@ -354,21 +405,6 @@ export function CalendarView({ trades }: { trades: Trade[] }) {
       </div>
     </>
   );
-}
-
-function weeksOfMonth(cells: string[], offset: number): string[][] {
-  const padded: Array<string | null> = [
-    ...Array.from({ length: offset }, () => null),
-    ...cells,
-  ];
-  while (padded.length % 7 !== 0) padded.push(null);
-  const weeks: string[][] = [];
-  for (let i = 0; i < padded.length; i += 7) {
-    weeks.push(
-      padded.slice(i, i + 7).filter((date): date is string => Boolean(date)),
-    );
-  }
-  return weeks;
 }
 
 function BestWorstSide({
