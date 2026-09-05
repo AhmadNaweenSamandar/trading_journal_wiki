@@ -1,3 +1,8 @@
+/** Round to cents so a week total matches the day cells you can add by eye. */
+export function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
 export function currency(value: number, digits = 2): string {
   const sign = value < 0 ? "-" : "";
   return `${sign}$${Math.abs(value).toLocaleString("en-US", {

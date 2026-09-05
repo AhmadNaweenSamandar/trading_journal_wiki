@@ -5,7 +5,7 @@ import { useCallback, useMemo, useState } from "react";
 
 import { Donut } from "@/components/circles";
 import { Panel } from "@/components/ui";
-import { currency, tone } from "@/lib/format";
+import { currency, roundMoney, tone } from "@/lib/format";
 import { byDay, dateOf, netPnl, type DayBucket } from "@/lib/metrics";
 import type { Trade } from "@/lib/types";
 
@@ -79,22 +79,40 @@ function daysInMonth(key: string): string[] {
   );
 }
 
+type MonthWeek = {
+  slots: Array<string | null>;
+  /** Days that count toward this week's total. */
+  sumDates: string[];
+};
+
 /**
  * One row per Saturday-start week. Slots follow Sat, Mon–Fri, Sun so a Friday
  * always sits under Friday — never the next sequential cell.
+ *
+ * Week 1 of a month that starts mid-week also totals the leftover days from
+ * the previous month (they belong to this Sat–Sun week). The previous month
+ * keeps those days in its own last week and does not pick up the new month.
  */
-function monthWeeks(cells: string[]): Array<Array<string | null>> {
+function monthWeeks(cells: string[]): MonthWeek[] {
   const inMonth = new Set(cells);
-  const weeks: Array<Array<string | null>> = [];
+  const weeks: MonthWeek[] = [];
+  const first = cells[0];
   const last = cells[cells.length - 1];
-  if (!last) return weeks;
+  if (!first || !last) return weeks;
 
-  for (let saturday = saturdayOf(cells[0]); saturday <= last; saturday = addUtcDays(saturday, 7)) {
+  for (let saturday = saturdayOf(first); saturday <= last; saturday = addUtcDays(saturday, 7)) {
     const sequential = [0, 1, 2, 3, 4, 5, 6].map((offset) => addUtcDays(saturday, offset));
     const [sat, sun, mon, tue, wed, thu, fri] = sequential;
-    weeks.push(
-      [sat, mon, tue, wed, thu, fri, sun].map((date) => (inMonth.has(date) ? date : null)),
+    const slots = [sat, mon, tue, wed, thu, fri, sun].map((date) =>
+      inMonth.has(date) ? date : null,
     );
+    const carriesPriorMonth = saturday < first;
+    weeks.push({
+      slots,
+      sumDates: carriesPriorMonth
+        ? sequential
+        : sequential.filter((date) => inMonth.has(date)),
+    });
   }
   return weeks;
 }
@@ -280,7 +298,7 @@ export function CalendarView({ trades }: { trades: Trade[] }) {
                       </div>
                     ))}
                     {weeks.flatMap((week, weekIndex) =>
-                      week.map((date, column) => {
+                      week.slots.map((date, column) => {
                         if (!date) {
                           return (
                             <div
@@ -358,12 +376,12 @@ export function CalendarView({ trades }: { trades: Trade[] }) {
                     Weeks
                   </div>
                   {weeks.map((week, index) => {
-                    const traded = week.filter(
-                      (date): date is string =>
-                        date != null && dayStats.has(date) && weekdayActive(date),
+                    const traded = week.sumDates.filter(
+                      (date) => dayStats.has(date) && weekdayActive(date),
                     );
                     const weekPnl = traded.reduce(
-                      (sum, date) => sum + (dayStats.get(date)?.pnl ?? 0),
+                      (sum, date) =>
+                        sum + roundMoney(dayStats.get(date)?.pnl ?? 0),
                       0,
                     );
                     return (
@@ -374,7 +392,7 @@ export function CalendarView({ trades }: { trades: Trade[] }) {
                         <p className="text-[11px] font-medium text-sky-300">
                           Week {index + 1}
                         </p>
-                        <p className="text-sm font-semibold text-sky-300">
+                        <p className={`text-sm font-semibold ${tone(weekPnl)}`}>
                           {currency(weekPnl)}
                         </p>
                         <p className="text-[10px] text-sky-400/80">
