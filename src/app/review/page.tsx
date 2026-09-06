@@ -1,9 +1,9 @@
 import Link from "next/link";
 
 import { BarRow, Donut, Legend, Ring } from "@/components/circles";
-import { FocusPicker } from "@/components/FocusPicker";
 import { EmptyState, Meter, PageHeader, Panel } from "@/components/ui";
-import { getFocuses, getSettings, getTrades } from "@/lib/db";
+import { WeekNoteEditor } from "@/components/WeekNoteEditor";
+import { getSettings, getTrades, getWeekNotes } from "@/lib/db";
 import {
   currency,
   holdLabel,
@@ -22,7 +22,6 @@ import {
   detectDrift,
   edgeConcentration,
   intradaySequence,
-  measureFinding,
   offPlanByHour,
   planAdherence,
   ruleViolations,
@@ -47,11 +46,11 @@ export default async function ReviewPage({
 }: {
   searchParams: Promise<{ week?: string }>;
 }) {
-  const [{ week: requested }, trades, settings, focuses] = await Promise.all([
+  const [{ week: requested }, trades, settings, weekNotes] = await Promise.all([
     searchParams,
     getTrades(),
     getSettings(),
-    getFocuses(),
+    getWeekNotes(),
   ]);
 
   if (trades.length === 0) {
@@ -117,12 +116,9 @@ export default async function ReviewPage({
   const sequence = intradaySequence(trades);
   const offPlanHours = offPlanByHour(trades);
 
-  const activeFocus = focuses.find((f) => f.weekStart === current.key) ?? null;
-  const nextWeek = shiftWeek(current.key, 7);
-  const nextFocus = focuses.find((f) => f.weekStart === nextWeek) ?? null;
-  const focusNow = activeFocus
-    ? measureFinding(activeFocus.findingId, current.trades, settings)
-    : null;
+  const lastWeek = shiftWeek(current.key, -7);
+  const lastWeekNote = weekNotes.find((note) => note.weekStart === lastWeek) ?? null;
+  const thisWeekNote = weekNotes.find((note) => note.weekStart === current.key) ?? null;
 
   return (
     <>
@@ -227,44 +223,20 @@ export default async function ReviewPage({
         </Panel>
       </div>
 
-      {activeFocus ? (
+      {lastWeekNote?.body ? (
         <div className="mb-4">
           <Panel
-            title="Change committed for this week"
-            description="Re-measured against the trades you logged this week."
+            title="Key summary from last week"
+            description={`Written at the end of the week of ${longDate(lastWeek)}.`}
           >
-            <p className="text-sm text-slate-200">{activeFocus.statement}</p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-3">
-              <Cell
-                label="When chosen"
-                value={currency(activeFocus.baselineImpact)}
-                className="text-slate-300"
-              />
-              <Cell
-                label="This week"
-                value={focusNow ? currency(focusNow.impact) : currency(0)}
-                className={focusNow ? "text-rose-400" : "text-emerald-400"}
-              />
-              <Cell
-                label="Change"
-                value={currency(
-                  (focusNow?.impact ?? 0) - activeFocus.baselineImpact,
-                )}
-                className={tone(
-                  activeFocus.baselineImpact - (focusNow?.impact ?? 0),
-                )}
-              />
-            </div>
-            <p className="mt-2 text-xs text-slate-500">
-              {focusNow
-                ? `The pattern still appears: ${focusNow.detail}.`
-                : "The pattern did not appear in this week's trades."}
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-200">
+              {lastWeekNote.body}
             </p>
           </Panel>
         </div>
       ) : null}
 
-      <div className="mb-4 grid gap-4 lg:grid-cols-2">
+      <div className="mb-4 grid items-start gap-4 lg:grid-cols-2">
         <Panel
           title="2 · Process vs outcome"
           description="Every decided trade this week graded on whether you followed your rules, before looking at whether it paid. A losing week inside your rules is variance; a winning week outside them is a warning."
@@ -325,9 +297,11 @@ export default async function ReviewPage({
                   <li
                     key={violation.id}
                     className={`flex items-start justify-between gap-3 rounded-lg border px-3 py-2 ${
-                      violation.repeat
-                        ? "border-rose-500/30 bg-rose-500/5"
-                        : "border-sky-500/20"
+                      violation.pnl > 0
+                        ? "border-emerald-500/30 bg-emerald-500/5"
+                        : violation.pnl < 0
+                          ? "border-rose-500/30 bg-rose-500/5"
+                          : "border-sky-500/20"
                     }`}
                   >
                     <div className="min-w-0">
@@ -727,24 +701,6 @@ export default async function ReviewPage({
         </div>
 
         <div className="space-y-4">
-          <Panel
-            title="4 · One change for next week"
-            description={`Applies to the week of ${longDate(nextWeek)}. One change, not three: picked from the ranked list and re-measured when that week is reviewed.`}
-          >
-            <FocusPicker
-              weekStart={nextWeek}
-              candidates={ranked}
-              existing={
-                nextFocus
-                  ? {
-                      statement: nextFocus.statement,
-                      baselineImpact: nextFocus.baselineImpact,
-                    }
-                  : null
-              }
-            />
-          </Panel>
-
           <Panel title="Day pattern" description="This week's sessions.">
             <div className="mb-3 flex justify-center">
               <Donut
@@ -799,36 +755,6 @@ export default async function ReviewPage({
             </Panel>
           ) : null}
 
-          <Panel
-            title="Lessons logged this week"
-            description="Your own words, in order."
-            action={
-              <Link href="/lessons" className="text-xs text-sky-400 hover:text-sky-300">
-                All
-              </Link>
-            }
-          >
-            <ul className="space-y-2">
-              {current.trades
-                .filter((t) => t.lesson)
-                .map((trade) => (
-                  <li key={trade.id} className="text-sm">
-                    <Link
-                      href={`/trades/${trade.id}`}
-                      className="text-slate-300 hover:text-sky-300"
-                    >
-                      {trade.lesson}
-                    </Link>
-                    <span className="ml-1.5 text-xs text-slate-600">
-                      {trade.coin} · {currency(netPnl(trade))}
-                    </span>
-                  </li>
-                ))}
-              {current.trades.every((t) => !t.lesson) ? (
-                <li className="text-sm text-slate-500">None recorded.</li>
-              ) : null}
-            </ul>
-          </Panel>
         </div>
       </div>
 
@@ -884,6 +810,58 @@ export default async function ReviewPage({
               </tbody>
             </table>
           </div>
+        </Panel>
+      </div>
+
+      <div className="mt-4">
+        <Panel
+          title="4 · Lessons logged this week"
+          description="Read each one on its own. These are the words you wrote while the trade was still fresh."
+          action={
+            <Link href="/lessons" className="text-xs text-sky-400 hover:text-sky-300">
+              All lessons
+            </Link>
+          }
+        >
+          {current.trades.some((trade) => trade.lesson) ? (
+            <ul className="space-y-4">
+              {current.trades
+                .filter((trade) => trade.lesson)
+                .map((trade) => (
+                  <li
+                    key={trade.id}
+                    className="rounded-lg border border-sky-500/20 px-4 py-3"
+                  >
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-200">
+                      {trade.lesson}
+                    </p>
+                    <p className="mt-2 text-xs text-slate-500">
+                      <Link
+                        href={`/trades/${trade.id}`}
+                        className="text-sky-400 hover:text-sky-300"
+                      >
+                        #{trade.seq} {trade.coin}
+                      </Link>
+                      <span className="mx-1.5 text-slate-600">·</span>
+                      {longDate(dateOf(trade))}
+                      <span className="mx-1.5 text-slate-600">·</span>
+                      <span className={tone(netPnl(trade))}>{currency(netPnl(trade))}</span>
+                    </p>
+                  </li>
+                ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-slate-500">No lessons recorded this week.</p>
+          )}
+        </Panel>
+      </div>
+
+      <div className="mt-4">
+        <Panel
+          title="5 · This week's notes"
+          description="Your summary after sitting with the numbers. Next week's review opens with this as last week's key summary."
+        >
+          <WeekNoteEditor weekStart={current.key} initial={thisWeekNote?.body ?? ""} />
         </Panel>
       </div>
     </>

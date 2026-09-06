@@ -58,6 +58,13 @@ export interface Focus {
   createdAt: string;
 }
 
+/** Personal notes written after reviewing a week. Shown as last week's key summary. */
+export interface WeekNote {
+  weekStart: string;
+  body: string;
+  updatedAt: string;
+}
+
 export interface Screenshots {
   /** Exit chart on the 1 minute timeframe. */
   exit1m: string;

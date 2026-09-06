@@ -4,13 +4,14 @@ import path from "node:path";
 import { hydratePremarket } from "./premarket";
 import { seedNotes } from "./seed";
 import { DEFAULT_SETTINGS } from "./taxonomy";
-import type { Biometrics, Focus, Note, Premarket, Settings, Trade } from "./types";
+import type { Biometrics, Focus, Note, Premarket, Settings, Trade, WeekNote } from "./types";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const TRADES_FILE = path.join(DATA_DIR, "trades.json");
 const NOTES_FILE = path.join(DATA_DIR, "notes.json");
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 const FOCUS_FILE = path.join(DATA_DIR, "focus.json");
+const WEEK_NOTES_FILE = path.join(DATA_DIR, "week-notes.json");
 const PREMARKET_FILE = path.join(DATA_DIR, "premarket.json");
 const BIOMETRICS_FILE = path.join(DATA_DIR, "biometrics.json");
 const BACKUP_DIR = path.join(DATA_DIR, "backups");
@@ -126,6 +127,14 @@ export async function getFocuses(): Promise<Focus[]> {
 
 export async function saveFocuses(focuses: Focus[]): Promise<void> {
   await writeJson(FOCUS_FILE, focuses);
+}
+
+export async function getWeekNotes(): Promise<WeekNote[]> {
+  return readJson<WeekNote[]>(WEEK_NOTES_FILE, []);
+}
+
+export async function saveWeekNotes(notes: WeekNote[]): Promise<void> {
+  await writeJson(WEEK_NOTES_FILE, notes);
 }
 
 /** Newest first, so the most recent plan is always at the top of a list. */
