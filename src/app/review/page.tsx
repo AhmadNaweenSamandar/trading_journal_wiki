@@ -124,7 +124,7 @@ export default async function ReviewPage({
     <>
       <PageHeader
         title="Weekly review"
-        subtitle={`Week of ${longDate(current.key)} · ${current.stats.count} trades · a repeatable five-step pass, every figure computed from your own logged data`}
+        subtitle={`Week of ${longDate(current.key)} · ${current.stats.count} trades · every figure computed from your own logged data`}
         action={
           <div className="flex items-center gap-2">
             {weeks[currentIndex + 1] ? (
@@ -208,7 +208,7 @@ export default async function ReviewPage({
 
       <div className="mb-4">
         <Panel
-          title={`1 · This week vs your ${settings.baselineDays}-day baseline`}
+          title={`This week vs your ${settings.baselineDays}-day baseline`}
           description={
             baseline.baselineTrades === 0
               ? `No trades logged between ${baseline.from} and ${baseline.to}, so there is nothing to compare against yet.`
@@ -236,9 +236,9 @@ export default async function ReviewPage({
         </div>
       ) : null}
 
-      <div className="mb-4 grid items-start gap-4 lg:grid-cols-2">
+      <div className="mb-4">
         <Panel
-          title="2 · Process vs outcome"
+          title="Process vs outcome"
           description="Every decided trade this week graded on whether you followed your rules, before looking at whether it paid. A losing week inside your rules is variance; a winning week outside them is a warning."
         >
           {adherence.total === 0 ? (
@@ -281,12 +281,14 @@ export default async function ReviewPage({
             </>
           )}
         </Panel>
+      </div>
 
-        <div className="space-y-4">
-          <Panel
-            title="Repeat rule breaks this week"
-            description="The same rule broken twice in one week is a pattern, not a slip. Ordered by what each one cost."
-          >
+      <div className="mb-4 grid gap-4 lg:grid-cols-2 lg:items-stretch">
+        <Panel
+          className="h-full"
+          title="Repeat rule breaks this week"
+          description="The same rule broken twice in one week is a pattern, not a slip. Ordered by what each one cost."
+        >
             {violations.length === 0 ? (
               <p className="text-sm text-emerald-400">
                 Every rule on your checklist was followed on every trade this week.
@@ -321,6 +323,7 @@ export default async function ReviewPage({
             )}
           </Panel>
 
+        <div className="flex h-full flex-col gap-4">
           <Panel
             title="Does the week survive without its best trade?"
             description="If one winner carries the week, the result is a single outcome rather than a repeatable edge."
@@ -361,13 +364,10 @@ export default async function ReviewPage({
               </div>
             )}
           </Panel>
-        </div>
-      </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
           <Panel
-            title="3 · Patterns ranked by what they cost"
+            className="min-h-0 flex-1"
+            title="Patterns ranked by what they cost"
             description={`Measured across all ${trades.length} logged trades. Slices below your ${settings.minSampleSize}-trade floor are marked as thin samples.`}
           >
             {ranked.length === 0 ? (
@@ -382,24 +382,173 @@ export default async function ReviewPage({
               </ul>
             )}
           </Panel>
+        </div>
+      </div>
 
-          <Panel
-            title="This week in isolation"
-            description="The same measurement restricted to the review period, before any sample-size filter."
-          >
-            {weekFindings.length === 0 ? (
-              <p className="text-sm text-slate-500">
-                No losing slices in this week&apos;s trades.
-              </p>
-            ) : (
-              <ul className="divide-y divide-sky-500/20">
-                {weekFindings.slice(0, 6).map((finding) => (
-                  <FindingRow key={finding.id} finding={finding} compact />
+      <div className="mb-4">
+        <Panel
+          title="Trade order within the day"
+          description="Results by where a trade fell in the day's sequence. If P&L degrades after the first few, the extra trades are costing you rather than adding."
+        >
+          {sequence.length === 0 ? (
+            <p className="text-sm text-slate-500">Not enough data yet.</p>
+          ) : (
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div>
+                <p className="label mb-2">Expectancy per trade</p>
+                <BarRow
+                  height={150}
+                  formatValue={(v) => currency(v)}
+                  bars={sequence.map((row) => ({
+                    label: row.ordinal,
+                    value: Number(row.stats.expectancy.toFixed(2)),
+                    caption: `${row.stats.count} trades`,
+                  }))}
+                />
+              </div>
+              <div>
+                <p className="label mb-2">Win rate</p>
+                <div className="flex flex-wrap justify-around gap-3">
+                  {sequence.map((row) => (
+                    <div key={row.ordinal} className="text-center">
+                      <Ring
+                        size={78}
+                        thickness={8}
+                        value={row.stats.winRate}
+                        color={row.stats.netPnl >= 0 ? "#10b981" : "#f43f5e"}
+                        centerValue={percent(row.stats.winRate, 0)}
+                      />
+                      <p className="mt-1 text-[11px] text-slate-400">{row.ordinal}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </Panel>
+      </div>
+
+      <div className="mb-4 grid gap-4 lg:grid-cols-2 lg:items-stretch">
+        <Panel
+          className="h-full"
+          title="This week in isolation"
+          description="The same measurement restricted to the review period, before any sample-size filter."
+        >
+          {weekFindings.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              No losing slices in this week&apos;s trades.
+            </p>
+          ) : (
+            <ul className="divide-y divide-sky-500/20">
+              {weekFindings.slice(0, 6).map((finding) => (
+                <FindingRow key={finding.id} finding={finding} compact />
+              ))}
+            </ul>
+          )}
+        </Panel>
+
+        <Panel className="h-full" title="Day pattern" description="This week's sessions.">
+          <div className="flex h-full flex-col justify-center">
+            <div className="mb-3 flex justify-center">
+              <Donut
+                size={126}
+                segments={[
+                  { label: "Green days", value: days.greenDays, color: "#10b981" },
+                  { label: "Red days", value: days.redDays, color: "#f43f5e" },
+                ]}
+                centerValue={`${days.greenDays}/${days.greenDays + days.redDays}`}
+                centerLabel="green"
+                centerClass={
+                  days.greenDays >= days.redDays ? "text-emerald-400" : "text-rose-400"
+                }
+              />
+            </div>
+            <dl className="space-y-2 text-sm">
+              <Stat
+                label="Longest green streak"
+                value={`${days.longestGreenStreak} days`}
+              />
+              <Stat label="Longest red streak" value={`${days.longestRedStreak} days`} />
+              <Stat
+                label="Red day after a green day"
+                value={`${days.givebackDays} · ${currency(days.givebackCost)}`}
+              />
+            </dl>
+          </div>
+        </Panel>
+      </div>
+
+      {offPlanHours.length > 0 ||
+      (concentration && concentration.contributors.length > 0) ? (
+        <div
+          className={`mb-4 grid gap-4 lg:items-stretch ${
+            offPlanHours.length > 0 &&
+            concentration &&
+            concentration.contributors.length > 0
+              ? "lg:grid-cols-2"
+              : "lg:grid-cols-1"
+          }`}
+        >
+          {offPlanHours.length > 0 ? (
+            <Panel
+              className="h-full"
+              title="When rule breaks happen"
+              description="Off-plan trades by entry hour, across the whole journal. Rule breaks usually cluster in a specific part of the session."
+            >
+              <div className="flex h-full flex-wrap content-center justify-around gap-4">
+                {offPlanHours.slice(0, 6).map((row) => (
+                  <div key={row.hour} className="text-center">
+                    <Ring
+                      size={88}
+                      value={row.share}
+                      color="#f43f5e"
+                      centerValue={percent(row.share, 0)}
+                      centerLabel="off plan"
+                      centerClass="text-rose-400"
+                    />
+                    <p className="mt-1 font-mono text-sm text-slate-300">{row.hour}</p>
+                    <p className="text-[11px] text-slate-500">
+                      {row.offPlan} of {row.total}
+                    </p>
+                    <p className={`text-[11px] ${tone(row.pnl)}`}>
+                      {currency(row.pnl)}
+                    </p>
+                  </div>
                 ))}
-              </ul>
-            )}
-          </Panel>
+              </div>
+            </Panel>
+          ) : null}
 
+          {concentration && concentration.contributors.length > 0 ? (
+            <Panel
+              className="h-full"
+              title="Edge concentration"
+              description={`${percent(concentration.topShare, 0)} of gross profit comes from your top ${Math.min(2, concentration.contributors.length)} strategies.`}
+            >
+              <div className="flex h-full flex-col items-center justify-center gap-3">
+                <Donut
+                  size={140}
+                  segments={concentrationSegments}
+                  centerValue={percent(concentration.topShare, 0)}
+                  centerLabel="top 2"
+                  centerClass={
+                    concentration.topShare > 80 ? "text-amber-400" : "text-slate-100"
+                  }
+                />
+                <div className="w-full">
+                  <Legend segments={concentrationSegments} />
+                </div>
+                <p className="w-full border-t border-sky-500/20 pt-3 text-xs text-slate-500">
+                  {concentration.carrying} strategies net positive ·{" "}
+                  {concentration.dragging} net negative
+                </p>
+              </div>
+            </Panel>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="mb-4">
           {drift ? (
             <Panel
               title={`Drift — last ${drift.windowSize} trades vs the ${drift.baseline.count} before`}
@@ -502,77 +651,9 @@ export default async function ReviewPage({
               <Meter value={trades.length} max={settings.driftWindow * 2} />
             </Panel>
           )}
+      </div>
 
-          <Panel
-            title="Trade order within the day"
-            description="Results by where a trade fell in the day's sequence. If P&L degrades after the first few, the extra trades are costing you rather than adding."
-          >
-            {sequence.length === 0 ? (
-              <p className="text-sm text-slate-500">Not enough data yet.</p>
-            ) : (
-              <div className="grid gap-6 sm:grid-cols-2">
-                <div>
-                  <p className="label mb-2">Expectancy per trade</p>
-                  <BarRow
-                    height={150}
-                    formatValue={(v) => currency(v)}
-                    bars={sequence.map((row) => ({
-                      label: row.ordinal,
-                      value: Number(row.stats.expectancy.toFixed(2)),
-                      caption: `${row.stats.count} trades`,
-                    }))}
-                  />
-                </div>
-                <div>
-                  <p className="label mb-2">Win rate</p>
-                  <div className="flex flex-wrap justify-around gap-3">
-                    {sequence.map((row) => (
-                      <div key={row.ordinal} className="text-center">
-                        <Ring
-                          size={78}
-                          thickness={8}
-                          value={row.stats.winRate}
-                          color={row.stats.netPnl >= 0 ? "#10b981" : "#f43f5e"}
-                          centerValue={percent(row.stats.winRate, 0)}
-                        />
-                        <p className="mt-1 text-[11px] text-slate-400">{row.ordinal}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </Panel>
-
-          {offPlanHours.length > 0 ? (
-            <Panel
-              title="When rule breaks happen"
-              description="Off-plan trades by entry hour, across the whole journal. Rule breaks usually cluster in a specific part of the session."
-            >
-              <div className="flex flex-wrap justify-around gap-4">
-                {offPlanHours.slice(0, 6).map((row) => (
-                  <div key={row.hour} className="text-center">
-                    <Ring
-                      size={88}
-                      value={row.share}
-                      color="#f43f5e"
-                      centerValue={percent(row.share, 0)}
-                      centerLabel="off plan"
-                      centerClass="text-rose-400"
-                    />
-                    <p className="mt-1 font-mono text-sm text-slate-300">{row.hour}</p>
-                    <p className="text-[11px] text-slate-500">
-                      {row.offPlan} of {row.total}
-                    </p>
-                    <p className={`text-[11px] ${tone(row.pnl)}`}>
-                      {currency(row.pnl)}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </Panel>
-          ) : null}
-
+      <div className="mb-4">
           <Panel
             title="Timing"
             description="How long you hold, and when in the day and week your results actually come from. Measured across the whole journal."
@@ -697,68 +778,9 @@ export default async function ReviewPage({
               </p>
             ) : null}
           </Panel>
-
-        </div>
-
-        <div className="space-y-4">
-          <Panel title="Day pattern" description="This week's sessions.">
-            <div className="mb-3 flex justify-center">
-              <Donut
-                size={126}
-                segments={[
-                  { label: "Green days", value: days.greenDays, color: "#10b981" },
-                  { label: "Red days", value: days.redDays, color: "#f43f5e" },
-                ]}
-                centerValue={`${days.greenDays}/${days.greenDays + days.redDays}`}
-                centerLabel="green"
-                centerClass={
-                  days.greenDays >= days.redDays ? "text-emerald-400" : "text-rose-400"
-                }
-              />
-            </div>
-            <dl className="space-y-2 text-sm">
-              <Stat
-                label="Longest green streak"
-                value={`${days.longestGreenStreak} days`}
-              />
-              <Stat label="Longest red streak" value={`${days.longestRedStreak} days`} />
-              <Stat
-                label="Red day after a green day"
-                value={`${days.givebackDays} · ${currency(days.givebackCost)}`}
-              />
-            </dl>
-          </Panel>
-
-          {concentration && concentration.contributors.length > 0 ? (
-            <Panel
-              title="Edge concentration"
-              description={`${percent(concentration.topShare, 0)} of gross profit comes from your top ${Math.min(2, concentration.contributors.length)} strategies.`}
-            >
-              <div className="flex flex-col items-center gap-3">
-                <Donut
-                  size={140}
-                  segments={concentrationSegments}
-                  centerValue={percent(concentration.topShare, 0)}
-                  centerLabel="top 2"
-                  centerClass={
-                    concentration.topShare > 80 ? "text-amber-400" : "text-slate-100"
-                  }
-                />
-                <div className="w-full">
-                  <Legend segments={concentrationSegments} />
-                </div>
-              </div>
-              <p className="mt-3 border-t border-sky-500/20 pt-3 text-xs text-slate-500">
-                {concentration.carrying} strategies net positive ·{" "}
-                {concentration.dragging} net negative
-              </p>
-            </Panel>
-          ) : null}
-
-        </div>
       </div>
 
-      <div className="mt-4">
+      <div className="mb-4">
         <Panel title="Week over week" description="Every week you have logged.">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[640px] text-left text-sm">
@@ -815,7 +837,7 @@ export default async function ReviewPage({
 
       <div className="mt-4">
         <Panel
-          title="4 · Lessons logged this week"
+          title="Lessons logged this week"
           description="Read each one on its own. These are the words you wrote while the trade was still fresh."
           action={
             <Link href="/lessons" className="text-xs text-sky-400 hover:text-sky-300">
@@ -858,7 +880,7 @@ export default async function ReviewPage({
 
       <div className="mt-4">
         <Panel
-          title="5 · This week's notes"
+          title="This week's notes"
           description="Your summary after sitting with the numbers. Next week's review opens with this as last week's key summary."
         >
           <WeekNoteEditor weekStart={current.key} initial={thisWeekNote?.body ?? ""} />

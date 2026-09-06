@@ -54,14 +54,16 @@ export function Panel({
   description,
   children,
   action,
+  className,
 }: {
   title: string;
   description?: string;
   children: ReactNode;
   action?: ReactNode;
+  className?: string;
 }) {
   return (
-    <section className="card p-5">
+    <section className={`card flex flex-col p-5${className ? ` ${className}` : ""}`}>
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-slate-200">{title}</h2>
@@ -71,7 +73,7 @@ export function Panel({
         </div>
         {action}
       </div>
-      {children}
+      <div className="min-h-0 flex-1">{children}</div>
     </section>
   );
 }
