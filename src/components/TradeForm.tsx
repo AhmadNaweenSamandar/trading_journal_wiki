@@ -228,16 +228,16 @@ export function TradeForm({ initial, settings, allTrades }: Props) {
               </button>
               <button
                 type="button"
-                onClick={() => exportTrades(allTrades, settings)}
+                onClick={() => void exportTrades(allTrades, settings)}
                 disabled={allTrades.length === 0}
                 className="rounded-lg border border-sky-500/30 px-3 py-2 text-sm text-slate-300 hover:border-sky-500/50 hover:bg-sky-400/20 hover:text-sky-300 disabled:opacity-40"
                 title={
                   allTrades.length === 0
                     ? "No trades to extract yet"
-                    : `Extract ${allTrades.length} trades to Excel`
+                    : `Extract ${allTrades.length} trades as a ZIP with Excel and photo attachments`
                 }
               >
-                Extract to Excel
+                Extract archive
               </button>
             </div>
           </div>

@@ -124,7 +124,41 @@ export function Donut({
   );
 }
 
-export function Legend({ segments }: { segments: Segment[] }) {
+export function Legend({
+  segments,
+  compact = false,
+}: {
+  segments: Segment[];
+  compact?: boolean;
+}) {
+  if (compact) {
+    return (
+      <ul className="mx-auto grid w-max grid-cols-[auto_auto] items-baseline gap-x-6 gap-y-1.5 text-sm">
+        {segments.map((segment) => (
+          <li key={segment.label} className="contents">
+            <span className="flex min-w-0 items-start gap-2">
+              <span
+                className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: segment.color }}
+              />
+              <span>
+                <span className="text-slate-300">{segment.label}</span>
+                {segment.detail ? (
+                  <span className="block text-[11px] text-slate-500">
+                    {segment.detail}
+                  </span>
+                ) : null}
+              </span>
+            </span>
+            <span className="text-right tabular-nums text-slate-400">
+              {segment.value}
+            </span>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
   return (
     <ul className="space-y-1.5 text-sm">
       {segments.map((segment) => (
@@ -139,7 +173,7 @@ export function Legend({ segments }: { segments: Segment[] }) {
               <span className="block text-[11px] text-slate-500">{segment.detail}</span>
             ) : null}
           </span>
-          <span className="shrink-0 text-slate-400">{segment.value}</span>
+          <span className="shrink-0 tabular-nums text-slate-400">{segment.value}</span>
         </li>
       ))}
     </ul>

@@ -594,9 +594,31 @@ export function isBlankImportRow(row: Partial<Record<MechanicalKey, unknown>>): 
 /*                                   Export                                   */
 /* -------------------------------------------------------------------------- */
 
-export function exportTrades(trades: Trade[], settings: Settings): void {
-  const rows = trades.map((trade) => {
+const ATTACHMENTS_DIR = "attachments";
+
+export async function exportTrades(trades: Trade[], settings: Settings): Promise<void> {
+  const stamp = new Date().toISOString().slice(0, 10);
+  const workbookName = `trades.xlsx`;
+  const zipName = `trading-journal-${stamp}.zip`;
+
+  const rows: Array<Record<string, string | number | null>> = [];
+  const linkTargets: Array<{ exit1m: string; exit15m: string }> = [];
+  const files: Array<{ path: string; data: ArrayBuffer }> = [];
+
+  for (const trade of trades) {
     const discipline = riskDiscipline(trade);
+    const exit1m = await packScreenshot(
+      trade.screenshots.exit1m,
+      `trade-${trade.seq}-1min`,
+      files,
+    );
+    const exit15m = await packScreenshot(
+      trade.screenshots.exit15m,
+      `trade-${trade.seq}-15min`,
+      files,
+    );
+    linkTargets.push({ exit1m, exit15m });
+
     const base: Record<string, string | number | null> = {
       "Trade #": trade.seq,
       Direction: trade.direction,
@@ -629,6 +651,8 @@ export function exportTrades(trades: Trade[], settings: Settings): void {
       "Trade Reason": trade.tradeReason,
       "Exit Reason": trade.exitReason,
       Lesson: trade.lesson,
+      "1min Photo Attachment": exit1m || "",
+      "15min Photo Attachment": exit15m || "",
     };
 
     for (const question of settings.emotionQuestions) {
@@ -639,13 +663,98 @@ export function exportTrades(trades: Trade[], settings: Settings): void {
     }
     base["Custom Tags"] = trade.customTags.join(", ");
 
-    return base;
-  });
+    rows.push(base);
+  }
 
   const sheet = XLSX.utils.json_to_sheet(rows);
+  attachPhotoHyperlinks(sheet, rows, linkTargets);
+
   const book = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(book, sheet, "Trades");
-  XLSX.writeFile(book, `trading-journal-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  const workbook = XLSX.write(book, { bookType: "xlsx", type: "array" }) as Uint8Array;
+
+  const JSZip = (await import("jszip")).default;
+  const zip = new JSZip();
+  zip.file(workbookName, workbook);
+  for (const file of files) {
+    zip.file(file.path, file.data);
+  }
+
+  const blob = await zip.generateAsync({ type: "blob" });
+  downloadBlob(blob, zipName);
+}
+
+/** Fetch a screenshot and queue it under attachments/; return the relative path for Excel. */
+async function packScreenshot(
+  url: string,
+  basename: string,
+  files: Array<{ path: string; data: ArrayBuffer }>,
+): Promise<string> {
+  const trimmed = url.trim();
+  if (!trimmed) return "";
+
+  try {
+    const response = await fetch(trimmed);
+    if (!response.ok) return "";
+    const data = await response.arrayBuffer();
+    const ext = extensionFromUrl(trimmed, response.headers.get("content-type"));
+    const relative = `${ATTACHMENTS_DIR}/${basename}.${ext}`;
+    files.push({ path: relative, data });
+    return relative;
+  } catch {
+    return "";
+  }
+}
+
+function extensionFromUrl(url: string, contentType: string | null): string {
+  const fromPath = /\.([a-z0-9]+)(?:\?|$)/i.exec(url)?.[1]?.toLowerCase();
+  if (fromPath && ["png", "jpg", "jpeg", "webp", "gif"].includes(fromPath)) {
+    return fromPath === "jpeg" ? "jpg" : fromPath;
+  }
+  if (contentType?.includes("jpeg")) return "jpg";
+  if (contentType?.includes("webp")) return "webp";
+  if (contentType?.includes("gif")) return "gif";
+  return "png";
+}
+
+/** Wire Excel hyperlinks so a click opens the sibling attachments file. */
+function attachPhotoHyperlinks(
+  sheet: XLSX.WorkSheet,
+  rows: Array<Record<string, string | number | null>>,
+  links: Array<{ exit1m: string; exit15m: string }>,
+): void {
+  if (rows.length === 0) return;
+  const headers = Object.keys(rows[0]);
+  const col1m = headers.indexOf("1min Photo Attachment");
+  const col15m = headers.indexOf("15min Photo Attachment");
+  if (col1m < 0 && col15m < 0) return;
+
+  links.forEach((link, index) => {
+    const row = index + 1; // header is row 0
+    if (col1m >= 0 && link.exit1m) {
+      const addr = XLSX.utils.encode_cell({ r: row, c: col1m });
+      const cell = sheet[addr] ?? { t: "s", v: link.exit1m };
+      cell.l = { Target: link.exit1m, Tooltip: "Open 1 minute exit chart" };
+      sheet[addr] = cell;
+    }
+    if (col15m >= 0 && link.exit15m) {
+      const addr = XLSX.utils.encode_cell({ r: row, c: col15m });
+      const cell = sheet[addr] ?? { t: "s", v: link.exit15m };
+      cell.l = { Target: link.exit15m, Tooltip: "Open 15 minute exit chart" };
+      sheet[addr] = cell;
+    }
+  });
+}
+
+function downloadBlob(blob: Blob, filename: string): void {
+  const href = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = href;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(href);
 }
 
 function round2(value: number | null): number | null {

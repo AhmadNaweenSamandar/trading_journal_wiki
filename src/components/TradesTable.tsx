@@ -179,12 +179,12 @@ export function TradesTable({
           </button>
 
           <button
-            onClick={() => exportTrades(filtered, settings)}
+            onClick={() => void exportTrades(filtered, settings)}
             disabled={filtered.length === 0}
             className="rounded-lg border border-sky-500/30 px-3 py-2 text-sm text-slate-400 hover:bg-sky-400/20 hover:text-sky-200 disabled:opacity-40"
-            title={`Extract ${filtered.length} trades to Excel`}
+            title={`Extract ${filtered.length} trades as a ZIP with Excel and photo attachments`}
           >
-            Extract to Excel
+            Extract archive
           </button>
         </div>
 

@@ -247,29 +247,34 @@ export default async function ReviewPage({
             </p>
           ) : (
             <>
-              <div className="flex flex-wrap items-center gap-5">
-                <Donut
-                  size={150}
-                  segments={adherenceSegments}
-                  centerValue={percent(100 - adherence.offPlanShare, 0)}
-                  centerLabel="on plan"
-                  centerClass={
-                    adherence.breachesThreshold ? "text-rose-400" : "text-emerald-400"
-                  }
-                />
-                <div className="min-w-[180px] flex-1">
-                  <Legend segments={adherenceSegments} />
+              <div className="flex items-center justify-between gap-6 px-2 sm:px-3">
+                <div className="shrink-0">
+                  <Donut
+                    size={132}
+                    segments={adherenceSegments}
+                    centerValue={percent(100 - adherence.offPlanShare, 0)}
+                    centerLabel="on plan"
+                    centerClass={
+                      adherence.breachesThreshold ? "text-rose-400" : "text-emerald-400"
+                    }
+                  />
                 </div>
-                <Ring
-                  size={104}
-                  value={adherence.offPlanShare}
-                  color={adherence.breachesThreshold ? "#f43f5e" : "#10b981"}
-                  centerValue={percent(adherence.offPlanShare, 0)}
-                  centerLabel="off plan"
-                  centerClass={
-                    adherence.breachesThreshold ? "text-rose-400" : "text-emerald-400"
-                  }
-                />
+                <div className="min-w-0 flex-1">
+                  <Legend segments={adherenceSegments} compact />
+                </div>
+                <div className="shrink-0">
+                  <Ring
+                    size={132}
+                    thickness={14}
+                    value={adherence.offPlanShare}
+                    color={adherence.breachesThreshold ? "#f43f5e" : "#10b981"}
+                    centerValue={percent(adherence.offPlanShare, 0)}
+                    centerLabel="off plan"
+                    centerClass={
+                      adherence.breachesThreshold ? "text-rose-400" : "text-emerald-400"
+                    }
+                  />
+                </div>
               </div>
 
               <p className="mt-3 border-t border-sky-500/20 pt-3 text-xs text-slate-500">
